@@ -1,0 +1,22 @@
+# M11 eye-tracking lab and M12 evaluation. All values are in 1280x720 thumbnail-frame pixels unless noted.
+# Reproducibility: change them here, never in code.
+
+map_size: [160, 90]       # maps are compared at this resolution (same as the stored attention map)
+
+click:                    # click test: user taps where they looked first and second
+  sigma_px: 60            # a click is a coarse memory of where the eye went (~2 degrees)
+  order_weights: {1: 1.0, 2: 0.7}
+
+webgazer:                 # webcam gaze is coarse (often 100-200 px off), so blur wider
+  sigma_px: 95
+  idt:                    # I-DT fixation detection (Salvucci & Goldberg 2000)
+    dispersion_px: 120    # max (x-range + y-range) inside one fixation
+    min_duration_ms: 100
+  min_samples: 15         # fewer raw samples than this is not a usable session
+  margin_px: 80           # samples further than this outside the frame are dropped
+
+first_look:
+  hit_radius_px: 160      # real first look within this distance of predicted fixation #1 counts as a hit
+
+limits:
+  max_points: 3000

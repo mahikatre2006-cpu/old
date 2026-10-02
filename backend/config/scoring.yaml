@@ -1,0 +1,59 @@
+# M6 scoring engine. Every score is 0-100 and is a weighted blend of components.
+# Each component maps one metric to 0..1 with a linear ramp: `bad` -> 0, `good` -> 1 (clipped).
+# `good` may be smaller than `bad` for "lower is better" metrics.
+# For "not too little, not too much" metrics use a band: bad_low -> good_low .. good_high -> bad_high.
+# Metric paths are <group>.<name> from the /analyze `metrics` object, plus `derived.*` values computed by the engine.
+# A component whose metric is missing (analyzer unavailable) is skipped and the rest are re-weighted.
+#
+# v1: thresholds set from the spread observed on 24 real thumbnails (ml/ calibration notes), refit in M12.
+version: v1-hand
+
+# Overall = weighted mean of the scores that apply (a score that is not applicable is left out).
+overall_weights:
+  focus: 0.30
+  text_readability: 0.25
+  face_impact: 0.20
+  clutter: 0.25
+
+# Subtracted from the overall score when a metric is extreme enough to sink a thumbnail by itself,
+# whatever the sub-scores say. Points scale linearly from 0 at `start` to `max_points` at `full`.
+penalties:
+  - {id: empty_frame, label: "Most of the frame is empty", metric: composition.negative_space_pct, start: 65, full: 90, max_points: 30}
+
+scores:
+  focus:   # does attention land clearly on one thing?
+    components:
+      - {id: concentration,   label: "Attention concentrated in a few spots", metric: composition.concentration_top10, bad: 0.20, good: 0.45, weight: 0.25}
+      - {id: focal_points,    label: "Few competing focal points",            metric: composition.focal_points,        bad: 7,    good: 2,    weight: 0.15}
+      - {id: peak_dominance,  label: "One peak clearly beats the next",       metric: composition.top_peak_ratio,      bad: 0.95, good: 0.50, weight: 0.10}
+      - {id: background,      label: "Little attention wasted on background", metric: derived.background_share,       bad: 60,   good: 20,   weight: 0.20}
+      - {id: ui_overlap,      label: "Key content clear of the duration badge", metric: composition.ui_overlap_pct,    bad: 8,    good: 1.5,  weight: 0.05}
+      # attention maps are rescaled per image, so they cannot see a washed-out thumbnail; this absolute measure can
+      - {id: punch,           label: "Strong light/dark contrast",            metric: color.lightness_contrast,        bad: 10,   good: 24,   weight: 0.15}
+      # concentrated is good, but a tiny cluster in a big empty frame is not
+      - {id: fill,            label: "Content fills the frame",               metric: composition.spread,              bad_low: 0.12, good_low: 0.25, good_high: 0.42, bad_high: 0.60, weight: 0.10}
+
+  text_readability:   # not applicable when the thumbnail has no text
+    requires: {metric: text.count, min: 1}
+    na_note: "No text found"
+    components:
+      - {id: mobile,      label: "Text survives at sidebar size",  metric: derived.text_mobile_readable_ratio, bad: 0.0, good: 1.0, weight: 0.40}
+      - {id: contrast,    label: "Text contrast (WCAG)",           metric: derived.text_weighted_contrast,     bad: 1.5, good: 7.0, weight: 0.30}
+      - {id: size,        label: "Largest text is big enough",     metric: text.largest_height_pct,            bad: 5,   good: 12,  weight: 0.20}
+      - {id: confidence,  label: "Text recognised confidently",    metric: text.mean_confidence,               bad: 0.5, good: 0.9, weight: 0.10}
+
+  face_impact:        # not applicable when no face is found
+    requires: {metric: face.count, min: 1}
+    na_note: "No face found"
+    components:
+      - {id: size,        label: "Face is large",                  metric: face.largest_area_pct,  bad: 0.5, good: 8,   weight: 0.40}
+      - {id: share,       label: "Face draws a good share of attention", metric: derived.face_share, bad: 3,  good: 25,  weight: 0.30}
+      - {id: expression,  label: "Expressive face",                metric: derived.face_intensity, bad: 0.1, good: 0.7, weight: 0.30}
+
+  clutter:            # 100 = clean, 0 = cluttered
+    components:
+      - {id: negative_space, label: "Breathing room (not cramped, not empty)", metric: composition.negative_space_pct, bad_low: 8, good_low: 30, good_high: 60, bad_high: 88, weight: 0.30}
+      - {id: peaks,          label: "Few attention peaks",         metric: composition.peak_count,         bad: 8,  good: 3,  weight: 0.25}
+      - {id: text_area,      label: "Text covers little area",     metric: text.area_pct,                  bad: 35, good: 10, weight: 0.20}
+      - {id: words,          label: "Few words",                   metric: text.word_count,                bad: 12, good: 4,  weight: 0.15}
+      - {id: text_lines,     label: "Few separate text lines",     metric: text.count,                     bad: 10, good: 2,  weight: 0.10}

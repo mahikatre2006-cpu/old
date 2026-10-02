@@ -1,0 +1,68 @@
+# Analyzer registry. Add a module by adding a line; nothing else changes.
+# stage 1 analyzers run in parallel; stage 2 runs on their outputs.
+
+ingest:
+  max_bytes: 10485760        # 10 MB upload cap
+  max_pixels: 50000000       # decompression-bomb guard
+  min_size: [64, 36]
+  target_size: [1280, 720]
+  crop_tolerance: 0.10       # aspect within 10% of 16:9 -> centre-crop, else letterbox
+
+preprocess:
+  model_input_size: [256, 192]   # W, H for the saliency model (FastSal). Analyzer resizes if its model differs.
+  renders:                       # name -> output width (height follows 16:9)
+    desktop: 360
+    mobile: 320
+    sidebar: 168
+  ui_mask:                       # fractions of the 1280x720 frame: [x0, y0, x1, y1]
+    duration_badge: [0.855, 0.860, 0.985, 0.975]
+    progress_bar: [0.0, 0.975, 1.0, 1.0]
+
+pipeline:
+  max_workers: 5
+
+analyzers:
+  # name: {module: "<package.module>:<Class>", stage: 1|2, enabled: true, options: {...}}
+  saliency:
+    module: analyzers.saliency:SaliencyAnalyzer
+    stage: 1
+    options:
+      # MSI-Net (SALICON), exported by ml/notebooks/msinet_to_onnx.ipynb
+      model: msinet.onnx
+      input_size: [320, 240]          # W, H the ONNX was exported with
+      layout: nhwc
+      input_range: 255.0
+      mean: null
+      std: null
+      pad_to_fit: true
+      sigmoid: false
+      # FastSal fallback (fast tier, also used by the browser editor later):
+      #   model: fastsal_salicon_A.onnx, input_size: [256, 192], sigmoid: true  (layout/range/mean/std at defaults)
+  face:
+    module: analyzers.face:FaceAnalyzer
+    stage: 1
+    options:
+      detector: face_detection_yunet_2023mar.onnx    # YuNet
+      emotion_model: enet_b0_8_va_mtl.onnx           # HSEmotion EfficientNet-B0: 8 emotions + valence/arousal
+      score_threshold: 0.6
+  text:
+    module: analyzers.text:TextAnalyzer
+    stage: 1
+    options:
+      text_score: 0.5          # RapidOCR (PP-OCRv4 mobile; English + Chinese only, no Indic scripts)
+      det_limit_side_len: 768
+      contrast_min: 4.5        # WCAG AA
+  subject:
+    module: analyzers.subject:SubjectAnalyzer      # U2-Net-lite (u2netp) salient-object mask
+    stage: 1
+    options:
+      model: u2netp.onnx
+      threshold: 0.5
+  color:
+    module: analyzers.color:ColorAnalyzer          # LAB colour-pop + spectral residual + DoG; k-means palette
+    stage: 1
+    options:
+      k: 5
+  composition:
+    module: analyzers.composition:CompositionAnalyzer   # reads the fused map, so it runs after stage 1
+    stage: 2

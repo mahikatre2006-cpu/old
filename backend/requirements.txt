@@ -1,0 +1,15 @@
+# v1 backend. Run from backend/:  uvicorn api.main:app --reload --port 8000
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart
+python-dotenv
+pyyaml
+pillow
+numpy==2.0.2
+opencv-contrib-python-headless==4.11.0.86   # never install plain opencv-python alongside
+onnxruntime
+rapidocr-onnxruntime                        # if pip pulls plain opencv-python: pip install --no-deps rapidocr-onnxruntime
+yt-dlp
+pytest
+psycopg[binary,pool]                        # only used when DATABASE_URL points at Postgres; otherwise SQLite

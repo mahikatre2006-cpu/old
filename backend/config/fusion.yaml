@@ -1,0 +1,24 @@
+# M5 fusion. v1 weights are set by hand; v2 will be fitted with NNLS on public eye-tracking data (M12)
+# and written back here. Keys are analyzer names; maps from analyzers that are missing or failed are
+# skipped and the remaining weights are renormalized, so a partial result still gets a heatmap.
+version: v1-hand
+weights:
+  saliency: 0.55
+  face: 0.15
+  text: 0.10
+  color: 0.10      # LAB colour-pop / spectral residual / DoG contrast (M4d)
+  subject: 0.10
+
+scanpath:
+  max_fixations: 5
+  min_fixations: 3
+  inhibition_sigma_frac: 0.08   # inhibition-of-return radius as a fraction of frame width
+  min_ratio: 0.25               # stop adding fixations below this fraction of the first peak (after min)
+  work_width: 320               # search runs on a downscaled map for speed
+
+shares:
+  # a pixel counts for the first matching type, so shares add up to 100%
+  priority: [face, text, subject]
+
+heatmap:
+  colormap: inferno   # inferno | magma | viridis | jet. The frontend legend must match.
